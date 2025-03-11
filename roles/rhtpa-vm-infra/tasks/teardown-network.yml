@@ -1,0 +1,44 @@
+---
+# Tear down a virtual network
+#
+# Task variables:
+#   network_spec:
+#     name: The network name (required)
+#
+
+- name: Setup libvirt
+  ansible.builtin.include_tasks:
+    file: setup-libvirt.yml
+
+- name: Check that network specification is defined properly
+  ansible.builtin.assert:
+    that:
+      - network_spec is defined
+      - network_spec is mapping
+      - network_spec.name is defined
+      - network_spec.name is string
+      - network_spec.name | trim | length > 0
+    fail_msg: >-
+      `network_spec` is not defined or it is not a mapping or
+      `network_spec.name` is not defined or it is not a string or it is blank
+      or empty
+
+- name: Deactivate `{{ network_spec.name | trim }}` virtual network
+  community.libvirt.virt_net:
+    name: "{{ network_spec.name | trim }}"
+    state: inactive
+
+- name: Destroy `{{ network_spec.name | trim }}` virtual network
+  community.libvirt.virt_net:
+    command: destroy
+    name: "{{ network_spec.name | trim }}"
+
+- name: Create `default` virtual network
+  community.libvirt.virt_net:
+    command: create
+    name: default
+
+- name: Make sure `default` virtual network is active
+  community.libvirt.virt_net:
+    name: default
+    state: active

@@ -1,0 +1,42 @@
+---
+# Setup and start the libvirtd service
+- name: Install libvirt
+  ansible.builtin.package:
+    name: "{{ __rhtpa_vm_infra_os_vars.packages.libvirt }}"
+    state: present
+
+- name: Enable and start libvirtd
+  block:
+    - name: Check if we have systemctl
+      ansible.builtin.shell: >-
+        command -v systemctl || :
+      args:
+        executable: /usr/bin/bash
+      register: __result
+      changed_when: false
+
+    - name: Check if systemctl works
+      ansible.builtin.shell: >-
+        systemctl show libvirtd || :
+      args:
+        executable: /usr/bin/bash
+      register: __systemctl
+      changed_when: false
+      when:
+        - __result.stdout | trim | length > 0
+
+    - name: Fail if systemctl does not work for another reason than not being the PID 1 process
+      ansible.builtin.assert:
+        that:
+          - (__systemctl.stderr | trim | length == 0) or
+            '(PID 1). Can\'t operate.' in __systemctl.stderr
+      when:
+        - __systemctl is defined
+
+    - name: Enable and start libvirtd
+      ansible.builtin.service:
+        name: libvirtd
+        enabled: true
+        state: started
+      when:
+        - __systemctl is undefined or (__systemctl.stderr | trim | length) == 0

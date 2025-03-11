@@ -1,0 +1,100 @@
+#!/bin/bash
+
+set -euo pipefail
+
+. "{{ __vmtools_spec.topdir }}/files/vmutils.sh"
+
+SXX_USER="{{ __vmtools_spec.user }}"
+SXX_COMMON_ARGS="{{ __vmtools_spec.ssh_common_args }}"
+SXX_TIMEOUT="--foreground 0"
+SXX_ID_RSA="{{ __vmtools_spec.id_rsa }}"
+
+declare -gA SXX_HOSTS=(
+{% for machine in __vmtools_spec.machines %}
+    [{{ machine.name | trim }}]="{{ machine.network.ipv4 | trim }}"
+{% endfor %}
+)
+
+function vmssh_main() {
+    local _remote="${1:-}"
+    local _user_at="${SXX_USER}@"
+
+    if [[ -z "${_remote}" ]]; then
+        echo "$0: Missing remote machine name/address" >&2
+        return 1
+    fi
+
+    shift 1
+
+    if [[ "${_remote}" =~ ^([^@]+@)?(.+)$ ]]; then
+        if [[ -n "${BASH_REMATCH[1]:-}" ]]; then
+            _user_at="${BASH_REMATCH[1]}"
+        fi
+        _remote="${BASH_REMATCH[2]}"
+        if [[ -n "${SXX_HOSTS[${_remote}]:-}" ]]; then
+            _remote="${SXX_HOSTS[${_remote}]}"
+        fi
+        _remote="${_user_at}${_remote}"
+    fi
+
+    remote_ssh "${SXX_ID_RSA}" "${_remote}" "$@"
+}
+
+function __basename() {
+    local _path="${1:-}"
+
+    if [[ "${_path}" =~ ^([^/@]+@)?[^:]+:(.+)$ ]]; then
+        _path="${BASH_REMATCH[2]}"
+    fi
+
+    _path="${_path##*/}"
+
+    echo -n "${_path:-.}"
+}
+
+function __resolve() {
+    local _remote="${1:-}"
+    local _user_at="${SXX_USER}@"
+
+    if [[ "${_remote}" =~ ^([^/@]+@)?([^:]+):(.+)$ ]]; then
+        if [[ -n "${BASH_REMATCH[1]:-}" ]]; then
+            _user_at="${BASH_REMATCH[1]}"
+        fi
+        _remote="${BASH_REMATCH[2]}"
+        if [[ -n "${SXX_HOSTS[${_remote}]:-}" ]]; then
+            _remote="${SXX_HOSTS[${_remote}]}"
+        fi
+        _remote="${_user_at}${_remote}:${BASH_REMATCH[3]}"
+    fi
+
+    echo -n "${_remote}"
+}
+
+function vmscp_main() {
+    local _source="${1:-}"
+    local _target="${2:-}"
+
+    if [[ -z "${_source}" ]]; then
+        echo "$0: Missing source" >&2
+        return 1
+    fi
+
+    if [[ -z "${_target}" ]]; then
+        _target="$(__basename "${_source}")"
+    fi
+
+    remote_scp "${SXX_ID_RSA}" "$(__resolve "${_source}")" "$(__resolve "${_target}")"
+}
+
+function main() {
+    local _entrypoint="${0##*/}_main"
+
+    if [[ "$(type -t "${_entrypoint}" 2>/dev/null || :)" != "function" ]]; then
+        echo "$0: Please, run me as \`vmssh\` or \`vmscp\`" >&2
+        return 1
+    fi
+
+    "${_entrypoint}" "$@"
+}
+
+main "$@"

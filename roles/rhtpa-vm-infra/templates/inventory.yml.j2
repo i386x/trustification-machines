@@ -1,0 +1,11 @@
+---
+{{ __inventory_spec.group }}:
+  hosts:
+    {{ __inventory_spec.host }}:
+      ansible_host: "{{ __inventory_spec.host }}"
+      ansible_port: 22
+      ansible_user: "{{ __inventory_spec.user }}"
+      ansible_ssh_pass: "{{ __inventory_spec.password }}"
+      ansible_ssh_private_key_file: "{{ __inventory_spec.id_rsa }}"
+      ansible_ssh_common_args: "{{ __inventory_spec.ssh_common_args }}"
+      ansible_python_interpreter: "{{ __inventory_spec.python }}"

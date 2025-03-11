@@ -1,0 +1,192 @@
+---
+# Setup a virtual network
+#
+# Task variables:
+#   network_spec:
+#     name: The network name (required)
+#     uuid: The network UUID (optional, computed if missing)
+#     bridge: The bridge name (required)
+#     mac: The bridge MAC address (required)
+#     ipv4: The bridge IPv4 address (required)
+#     dhcp:
+#       range: DHCP dynamic pool of hosts' addresses range (required)
+#       hosts: DHCP static pool of hosts[1] (optional)
+#
+#   [1] A minimal host specification:
+#     - name: A host name (required)
+#       network:
+#         name: A network name (required)
+#         mac: A host MAC address (required)
+#         ipv4: A host IPv4 address (required)
+#
+
+- name: Setup libvirt
+  ansible.builtin.include_tasks:
+    file: setup-libvirt.yml
+
+- name: Check that network specification is defined
+  ansible.builtin.assert:
+    that:
+      - network_spec is defined
+      - network_spec is mapping
+    fail_msg: >-
+      `network_spec` is not defined or it is not a mapping
+
+- name: Check that `network_spec.name` is defined
+  ansible.builtin.assert:
+    that:
+      - network_spec.name is defined
+      - network_spec.name is string
+      - network_spec.name | trim | length > 0
+    fail_msg: >-
+      `network_spec.name` is not defined or it is not a string or it is blank
+      or empty
+
+- name: Check `network_spec.uuid` if it is defined
+  ansible.builtin.assert:
+    that:
+      - network_spec.uuid is string
+      - network_spec.uuid | trim | length > 0
+    fail_msg: >-
+      `network_spec.uuid` is not a string or it is blank or empty
+  when:
+    - network_spec.uuid is defined
+
+- name: Generate `network_spec.uuid` if it is not defined
+  ansible.builtin.set_fact:
+    __rhtpa_vm_infra_net_uuid: "{{
+      network_spec.uuid | d(
+        (__rhtpa_vm_infra_net_uuid_base + (network_spec.name | trim)) | to_uuid
+      ) | trim }}"
+
+- name: Check that `network_spec.bridge` is defined
+  ansible.builtin.assert:
+    that:
+      - network_spec.bridge is defined
+      - network_spec.bridge is string
+      - network_spec.bridge | trim | length > 0
+    fail_msg: >-
+      `network_spec.bridge` is not defined or it is not a string or it is blank
+      or empty
+
+- name: Check that `network_spec.mac` is defined
+  ansible.builtin.assert:
+    that:
+      - network_spec.mac is defined
+      - network_spec.mac is string
+      - network_spec.mac | trim | length > 0
+    fail_msg: >-
+      `network_spec.mac` is not defined or it is not a string or it is blank or
+      empty
+
+- name: Check that `network_spec.ipv4` is defined
+  ansible.builtin.assert:
+    that:
+      - network_spec.ipv4 is defined
+      - network_spec.ipv4 is string
+      - network_spec.ipv4 | trim | length > 0
+    fail_msg: >-
+      `network_spec.ipv4` is not defined or it is not a string or it is blank
+      or empty
+
+- name: Check `network_spec.dhcp`
+  block:
+    - name: Check that `network_spec.dhcp` is defined
+      ansible.builtin.assert:
+        that:
+          - network_spec.dhcp is defined
+          - network_spec.dhcp is mapping
+        fail_msg: >-
+          `network_spec.dhcp` is not defined or it is not a mapping
+
+    - name: Check that `network_spec.dhcp.range` is defined
+      ansible.builtin.assert:
+        that:
+          - network_spec.dhcp.range is defined
+          - network_spec.dhcp.range is sequence
+          - network_spec.dhcp.range | length == 2
+          - network_spec.dhcp.range.0 is string
+          - network_spec.dhcp.range.0 | trim | length > 0
+          - network_spec.dhcp.range.1 is string
+          - network_spec.dhcp.range.1 | trim | length > 0
+        fail_msg: >-
+          `network_spec.dhcp.range` is not defined or it is not a list
+          containing exactly two non-empty and non-blank strings
+
+    - name: Check `network_spec.dhcp.hosts` if it is defined
+      ansible.builtin.assert:
+        that:
+          - network_spec.dhcp.hosts is sequence
+        fail_msg: >-
+          `network_spec.dhcp.hosts` is not a list
+      when:
+        - network_spec.dhcp.hosts is defined
+
+    - name: Check `network_spec.dhcp.hosts` content
+      ansible.builtin.assert:
+        that:
+          - item is mapping
+          - item.name is defined
+          - item.name is string
+          - item.name | trim | length > 0
+          - item.network is defined
+          - item.network is mapping
+          - item.network.name is defined
+          - item.network.name is string
+          - item.network.name | trim | length > 0
+          - item.network.mac is defined
+          - item.network.mac is string
+          - item.network.mac | trim | length > 0
+          - item.network.ipv4 is defined
+          - item.network.ipv4 is string
+          - item.network.ipv4 | trim | length > 0
+        fail_msg: >-
+          `{{ item }}` must be a mapping containing `name` (a non-empty and
+          non-blank string) and `network` (a mapping containing `name`, `mac`,
+          and `ipv4`, all non-empty and non-blank strings)
+      loop: "{{ network_spec.dhcp.hosts | d([]) }}"
+
+- name: Complete the network specification
+  ansible.builtin.set_fact:
+    __network_spec:
+      name: "{{ network_spec.name | trim }}"
+      uuid: "{{ __rhtpa_vm_infra_net_uuid }}"
+      bridge: "{{ network_spec.bridge | trim }}"
+      mac: "{{ network_spec.mac | trim }}"
+      ipv4: "{{ network_spec.ipv4 | trim }}"
+      dhcp:
+        range:
+          - "{{ network_spec.dhcp.range.0 | trim }}"
+          - "{{ network_spec.dhcp.range.1 | trim }}"
+        hosts: "{{ network_spec.dhcp.hosts | d([]) |
+          selectattr('network.name', 'equalto', (network_spec.name | trim)) }}"
+
+- name: Print the network specification
+  ansible.builtin.debug:
+    var: __network_spec
+
+- name: Deactivate `default` virtual network
+  community.libvirt.virt_net:
+    name: default
+    state: inactive
+
+- name: Destroy `default` virtual network
+  community.libvirt.virt_net:
+    command: destroy
+    name: default
+
+- name: Define `{{ __network_spec.name }}` virtual network
+  community.libvirt.virt_net:
+    command: define
+    name: "{{ __network_spec.name }}"
+    xml: "{{ lookup('ansible.builtin.template', 'libvirt-network.xml.j2') }}"
+
+- name: Create `{{ __network_spec.name }}` virtual network
+  community.libvirt.virt_net:
+    command: create
+    name: "{{ __network_spec.name }}"
+
+- name: Ensure `{{ __network_spec.name }}` virtual network is active
+  community.libvirt.virt_net:
+    name: "{{ __network_spec.name }}"
+    state: active

@@ -1,0 +1,86 @@
+---
+# Destroy provisioned virtual machine
+#
+# Task variables:
+#   vm_spec:
+#     name: Virtual machine name (required)
+#     image: Path to QCOW2 image relative to the workspace directory (required)
+#
+
+- name: Setup libvirt
+  ansible.builtin.include_tasks:
+    file: setup-libvirt.yml
+
+- name: Check that virtual machine specification and name are defined
+  ansible.builtin.include_tasks:
+    file: assert-vm_spec-name.yml
+
+- name: Check that workspace is defined and it is a directory
+  ansible.builtin.include_tasks:
+    file: assert-workspace.yml
+
+- name: Compute the path to the virtual machine artifacts
+  ansible.builtin.include_tasks:
+    file: artifacts-path.yml
+
+- name: Shutdown `{{ vm_spec.name | trim }}` virtual machine
+  community.libvirt.virt:
+    name: "{{ vm_spec.name | trim }}"
+    command: shutdown
+
+- name: Destroy `{{ vm_spec.name | trim }}` virtual machine
+  community.libvirt.virt:
+    name: "{{ vm_spec.name | trim }}"
+    command: undefine
+    force: true
+
+# Inside a container, `libvirt` sometimes not revert back the original
+# user:group of used files, leaving them with `qemu`:`qemu` as a user:group, so
+# we are going to ensure they are back manually. This is not so easy to do in
+# Ansible, since Ansible builtin `file` task does not accept numeric
+# owner/group values, so we are making several assumptions:
+#   1. We suppose that `ansible_user_uid` == `ansible_user_gid` on the host,
+#      which is the most common setup for the most users on Linux hosts
+#   2. We also suppose that `ansible_user_uid` == `ansible_effective_user_id`
+#   3. We also suppose that `ansible_user_gid` == `ansible_effective_group_id`
+#   4. Because all of files we are going to touch were created by Ansible
+#      executing this role, we are supposing that user:group of these files
+#      were `ansible_user_id`:`ansible_user_id`
+
+- name: Check effective user and group
+  ansible.builtin.assert:
+    that:
+      - ansible_user_id is defined
+      - ansible_user_uid is defined
+      - ansible_user_gid is defined
+      - ansible_effective_user_id is defined
+      - ansible_effective_group_id is defined
+      - ansible_user_uid == ansible_user_gid
+      - ansible_user_uid == ansible_effective_user_id
+      - ansible_user_gid == ansible_effective_group_id
+    fail_msg: >-
+      `ansible_user_id({{ ansible_user_id | d('undefined') }}` or
+      `ansible_user_uid({{ ansible_user_uid | d('undefined') }})` !=
+      `ansible_user_gid({{ ansible_user_gid | d('undefined') }})` or
+      `ansible_user_uid({{ ansible_user_uid | d('undefined') }})` !=
+      `ansible_effective_user_id({{ ansible_effective_user_id | d('undefined') }})` or
+      `ansible_user_gid({{ ansible_user_gid | d('undefined') }})` !=
+      `ansible_effective_group_id({{ ansible_effective_group_id | d('undefined') }})`
+      (in this message `'undefined' == anything` evaluates to false)
+
+- name: Get `vm_spec.image` stats
+  ansible.builtin.include_tasks:
+    file: vm_spec-image-stat.yml
+
+- name: Ensure `vm_spec.image` owner and group
+  ansible.builtin.file:
+    path: "{{ __result.stat.path }}"
+    state: touch
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
+    access_time: preserve
+    modification_time: preserve
+  when:
+    - __result.stat.path is defined
+    - __result.stat.isreg is defined
+    - __result.stat.isreg

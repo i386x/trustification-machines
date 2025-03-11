@@ -1,0 +1,6 @@
+---
+# Path to the workspace directory
+rhtpa_vm_infra_workspace: ""
+
+# Task to be executed (a task file without .yml suffix)
+invoke: ""

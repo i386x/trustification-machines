@@ -1,0 +1,12 @@
+---
+packages:
+  libvirt:
+    - libvirt
+    - libvirt-daemon-kvm
+
+  vmtools:
+    - openssh
+    - openssh-clients
+    - qemu-system-x86-core
+    - util-linux
+    - xorriso

@@ -1,0 +1,371 @@
+---
+# Setup and provision a virtual machine
+#
+# Task variables:
+#   vm_spec:
+#     name: Virtual machine name (required)
+#     uuid: Virtual machine UUID (optional, computed if missing)
+#     memory:
+#       unit: Memory size specification unit (optional, default 'MiB')
+#       size: Memory size in units specified above
+#     image: Path to QCOW2 image relative to the workspace directory (required)
+#     network:
+#       name: The virtual network name (required)
+#       mac: MAC address (required)
+#       ipv4: Virtual machine IPv4 address (required)
+#
+
+- name: Setup libvirt
+  ansible.builtin.include_tasks:
+    file: setup-libvirt.yml
+
+- name: Get the list of running virtual machines
+  community.libvirt.virt:
+    command: list_vms
+    state: running
+  register: __running_vms
+  changed_when: false
+
+- name: Print the list of running virtual machines
+  ansible.builtin.debug:
+    var: __running_vms
+
+- name: Check that virtual machine specification and name are defined
+  ansible.builtin.include_tasks:
+    file: assert-vm_spec-name.yml
+
+- name: Check that workspace is defined and it is a directory
+  ansible.builtin.include_tasks:
+    file: assert-workspace.yml
+
+- name: Get the path to Ansible inventories
+  ansible.builtin.shell: |
+    set -euo pipefail
+    source '{{ role_path }}/tools/common.sh'
+    echo "$(host_ansible_inventory_path '{{ rhtpa_vm_infra_workspace | trim }}')"
+  args:
+    executable: /usr/bin/bash
+  register: __result
+  changed_when: false
+
+- name: Compute the path to the Ansible inventory for this virtual machine
+  ansible.builtin.set_fact:
+    __rhtpa_vm_infra_ansible_inventory: "{{
+      (__result.stdout | trim) + '/' + (vm_spec.name | trim) + '.yml' }}"
+
+- name: Install requirements
+  ansible.builtin.package:
+    name: "{{ __rhtpa_vm_infra_os_vars.packages.vmtools }}"
+    state: present
+
+- name: Compute the path to the virtual machine artifacts
+  ansible.builtin.include_tasks:
+    file: artifacts-path.yml
+
+- name: Ensure the directory for virtual machine artifacts exists
+  ansible.builtin.file:
+    path: "{{ __rhtpa_vm_infra_artifacts }}"
+    state: directory
+    mode: '0755'
+
+- name: Check `vm_spec.uuid` if it is defined
+  ansible.builtin.assert:
+    that:
+      - vm_spec.uuid is string
+      - vm_spec.uuid | trim | length > 0
+    fail_msg: >-
+      `vm_spec.uuid` is not a string or it is blank or empty
+  when:
+    - vm_spec.uuid is defined
+
+- name: Generate `vm_spec.uuid` if it is not defined
+  ansible.builtin.set_fact:
+    __rhtpa_vm_infra_vm_uuid: "{{
+      vm_spec.uuid | d(
+        (__rhtpa_vm_infra_vm_uuid_base + (vm_spec.name | trim)) | to_uuid
+      ) | trim }}"
+
+- name: Check `vm_spec.memory`
+  block:
+    - name: Check that `vm_spec.memory` is defined
+      ansible.builtin.assert:
+        that:
+          - vm_spec.memory is defined
+          - vm_spec.memory is mapping
+        fail_msg: >-
+          `vm_spec.memory` is not defined or it is not a mapping
+
+    - name: Check `vm_spec.memory.unit` if it is defined
+      ansible.builtin.assert:
+        that:
+          - vm_spec.memory.unit is string
+          - vm_spec.memory.unit | trim | length > 0
+        fail_msg: >-
+          `vm_spec.memory.unit` is not a string or it is blank or empty
+      when:
+        - vm_spec.memory.unit is defined
+
+    - name: Check that `vm_spec.memory.size` is defined
+      ansible.builtin.assert:
+        that:
+          - vm_spec.memory.size is defined
+          - vm_spec.memory.size is integer
+          - vm_spec.memory.size > 0
+        fail_msg: >-
+          `vm_spec.memory.size` is not defined or it is not an integer or it is
+          less or equal to zero
+
+- name: Probe the number of CPUs
+  block:
+    - name: Run `lscpu -b -p=SOCKET,CORE`
+      ansible.builtin.shell: |
+        set -euo pipefail
+        lscpu -b -p=SOCKET,CORE | grep -cEe '^[0-9]+,[0-9]+$'
+      args:
+        executable: /usr/bin/bash
+      register: __result
+      changed_when: false
+
+    - name: Check the result of `lscpu -b -p=SOCKET,CORE`
+      ansible.builtin.assert:
+        that:
+          - __result.stdout | trim | int > 0
+        fail_msg: >-
+          No CPUs found
+
+    - name: Save the number of CPUs into the fact
+      ansible.builtin.set_fact:
+        __rhtpa_vm_infra_cpus: "{{ __result.stdout | trim | int }}"
+
+- name: Probe CPU sockets
+  block:
+    - name: Run `lscpu -b -p=SOCKET`
+      ansible.builtin.shell: |
+        set -euo pipefail
+        lscpu -b -p=SOCKET | grep -Ee '^[0-9]+$' | sort | uniq | wc -l
+      args:
+        executable: /usr/bin/bash
+      register: __result
+      changed_when: false
+
+    - name: Check the result of `lscpu -b -p=SOCKET`
+      ansible.builtin.assert:
+        that:
+          - __result.stdout | trim | int > 0
+        fail_msg: >-
+          No CPU sockets found
+
+    - name: Save the number of sockets into the fact
+      ansible.builtin.set_fact:
+        __rhtpa_vm_infra_sockets: "{{ __result.stdout | trim | int }}"
+
+- name: Probe CPU cores per socket
+  block:
+    - name: Run `lscpu -b -p=CORE`
+      ansible.builtin.shell: |
+        set -euo pipefail
+        lscpu -b -p=CORE | grep -Ee '^[0-9]+$' | sort | uniq | wc -l
+      args:
+        executable: /usr/bin/bash
+      register: __result
+      changed_when: false
+
+    - name: Check the result of `lscpu -b -p=CORE`
+      ansible.builtin.assert:
+        that:
+          - __result.stdout | trim | int > 0
+        fail_msg: >-
+          Number of CPU cores per socket is zero
+
+    - name: Save the number of cores per socket into the fact
+      ansible.builtin.set_fact:
+        __rhtpa_vm_infra_cores_per_socket: "{{ __result.stdout | trim | int }}"
+
+- name: Find a proper QEMU emulator
+  ansible.builtin.include_tasks:
+    file: find-qemu.yml
+  loop:
+    - qemu-kvm
+    - /usr/libexec/qemu-kvm
+    - /usr/bin/qemu-system-x86_64
+
+- name: Check that a proper QEMU emulator has been found
+  ansible.builtin.assert:
+    that:
+      __rhtpa_vm_infra_emulator is defined
+    fail_msg: >-
+      A proper QEMU emulator is not present on the system
+
+- name: Get `vm_spec.image` stats
+  ansible.builtin.include_tasks:
+    file: vm_spec-image-stat.yml
+
+- name: Check that `vm_spec.image` exists
+  ansible.builtin.assert:
+    that:
+      - __result.stat.isreg is defined
+      - __result.stat.isreg
+    fail_msg: >-
+      `vm_spec.image` does not exist or it is not a regular file
+
+- name: Compute the path to the cloud metadata ISO image
+  ansible.builtin.set_fact:
+    __rhtpa_vm_infra_cloud_metadata_image: "{{
+      (rhtpa_vm_infra_workspace | trim) + '/'
+      + __rhtpa_vm_infra_cloud_metadata_dir + '/'
+      + __rhtpa_vm_infra_cloud_metadata_iso }}"
+
+- name: Build the cloud metadata ISO image if it does not exist
+  ansible.builtin.shell: |
+    set -eu${_Q}o pipefail
+    source '{{ role_path }}/files/vmutils.sh'
+    create_cloud_init_metadata_iso '{{
+      vm_spec.name }}' '{{
+      __rhtpa_vm_infra_cloud_metadata_image }}' '{{
+      __rhtpa_vm_infra_user }}' '{{
+      __rhtpa_vm_infra_password }}'
+  args:
+    executable: /usr/bin/bash
+    creates: "{{ __rhtpa_vm_infra_cloud_metadata_image }}"
+
+- name: Check `vm_spec.network`
+  block:
+    - name: Check that `vm_spec.network` is defined
+      ansible.builtin.assert:
+        that:
+          - vm_spec.network is defined
+          - vm_spec.network is mapping
+        fail_msg: >-
+          `vm_spec.network` is not defined or it is not a mapping
+
+    - name: Check that `vm_spec.network.name` is defined
+      ansible.builtin.assert:
+        that:
+          - vm_spec.network.name is defined
+          - vm_spec.network.name is string
+          - vm_spec.network.name | trim | length > 0
+        fail_msg: >-
+          `vm_spec.network.name` is not defined or it is not a string or it is
+          blank or empty
+
+    - name: Check that `vm_spec.network.mac` is defined
+      ansible.builtin.assert:
+        that:
+          - vm_spec.network.mac is defined
+          - vm_spec.network.mac is string
+          - vm_spec.network.mac | trim | length > 0
+        fail_msg: >-
+          `vm_spec.network.mac` is not defined or it is not a string or it is
+          blank or empty
+
+    - name: Check that `vm_spec.network.ipv4` is defined
+      ansible.builtin.assert:
+        that:
+          - vm_spec.network.ipv4 is defined
+          - vm_spec.network.ipv4 is string
+          - vm_spec.network.ipv4 | trim | length > 0
+        fail_msg: >-
+          `vm_spec.network.ipv4` is not defined or it is not a string or it is
+          blank or empty
+
+- name: Compute the path to the guest serial traffic log
+  ansible.builtin.set_fact:
+    __rhtpa_vm_infra_guest_log_path: "{{
+      __rhtpa_vm_infra_artifacts + '/' + __rhtpa_vm_infra_guest_log }}"
+
+- name: Compute the path to the guest snapshot image
+  ansible.builtin.set_fact:
+    __rhtpa_vm_infra_snapshot_image_path: "{{
+      __rhtpa_vm_infra_artifacts + '/' + __rhtpa_vm_infra_snapshot_image }}"
+
+- name: Complete the virtual machine specification
+  ansible.builtin.set_fact:
+    __vm_spec:
+      name: "{{ vm_spec.name | trim }}"
+      uuid: "{{ __rhtpa_vm_infra_vm_uuid }}"
+      memory:
+        unit: "{{ vm_spec.memory.unit | d('MiB') | trim }}"
+        size: "{{ vm_spec.memory.size }}"
+      cpus: "{{ __rhtpa_vm_infra_cpus }}"
+      sockets: "{{ __rhtpa_vm_infra_sockets }}"
+      cores_per_socket: "{{ __rhtpa_vm_infra_cores_per_socket }}"
+      threads_per_core: "{{ ansible_processor_threads_per_core }}"
+      emulator: "{{ __rhtpa_vm_infra_emulator }}"
+      image: "{{
+        (rhtpa_vm_infra_workspace | trim) + '/' + (vm_spec.image | trim) }}"
+      cloud_metadata_image: "{{ __rhtpa_vm_infra_cloud_metadata_image }}"
+      network:
+        name: "{{ vm_spec.network.name | trim }}"
+        mac: "{{ vm_spec.network.mac | trim }}"
+        ipv4: "{{ vm_spec.network.ipv4 | trim }}"
+      guest_log: "{{ __rhtpa_vm_infra_guest_log_path }}"
+      snapshot_image: "{{ __rhtpa_vm_infra_snapshot_image_path }}"
+
+- name: Print the virtual machine specification
+  ansible.builtin.debug:
+    var: __vm_spec
+
+- name: Define `{{ __vm_spec.name }}` virtual machine
+  community.libvirt.virt:
+    command: define
+    xml: "{{ lookup('ansible.builtin.template', 'libvirt-vm.xml.j2') }}"
+
+- name: Ensure the backing store for `{{ __vm_spec.name }}` virtual machine is ready
+  ansible.builtin.shell: >-
+    qemu-img create -f qcow2 -b '{{ __vm_spec.image }}' -F qcow2
+    '{{ __vm_spec.snapshot_image }}'
+  args:
+    executable: /usr/bin/bash
+    creates: "{{ __vm_spec.snapshot_image }}"
+
+- name: Ensure `{{ __vm_spec.name }}` virtual machine is started
+  community.libvirt.virt:
+    name: "{{ __vm_spec.name }}"
+    state: running
+
+- name: Wait for `{{ __vm_spec.name }}` to be ready
+  ansible.builtin.shell: |
+    set -euo pipefail
+    source '{{ role_path }}/files/vmutils.sh'
+    export SXX_COMMON_ARGS='{{ __rhtpa_vm_infra_ssh_common_args }}'
+    export SXX_TIMEOUT=5s
+    remote_sshq '{{ rhtpa_vm_infra_workspace | trim }}/id_rsa' '{{
+      __rhtpa_vm_infra_user }}@{{ __vm_spec.network.ipv4 }}' /bin/true
+  args:
+    executable: /usr/bin/bash
+  register: __result
+  changed_when: false
+  until: __result.rc == 0
+  retries: 15
+  delay: 3
+
+- name: Probe Python interpreter on `{{ __vm_spec.name }}`
+  ansible.builtin.shell: |
+    set -euo pipefail
+    source '{{ role_path }}/files/vmutils.sh'
+    export SXX_COMMON_ARGS='{{ __rhtpa_vm_infra_ssh_common_args }}'
+    export SXX_TIMEOUT=5s
+    function remote_run() {
+      remote_ssh '{{ rhtpa_vm_infra_workspace | trim }}/id_rsa' '{{
+        __rhtpa_vm_infra_user }}@{{ __vm_spec.network.ipv4 }}' "$@"
+    }
+    discover_python_interpreter remote_run
+  args:
+    executable: /usr/bin/bash
+  register: __result
+  changed_when: false
+
+- name: Create the Ansible inventory for `{{ __vm_spec.name }}`
+  ansible.builtin.template:
+    src: inventory.yml.j2
+    dest: "{{ __rhtpa_vm_infra_ansible_inventory }}"
+    mode: '0644'
+  vars:
+    __inventory_spec:
+      group: "{{ __vm_spec.name }}"
+      host: "{{ __vm_spec.network.ipv4 }}"
+      user: "{{ __rhtpa_vm_infra_user }}"
+      password: "{{ __rhtpa_vm_infra_password }}"
+      id_rsa: "{{ rhtpa_vm_infra_workspace | trim }}/id_rsa"
+      ssh_common_args: "{{ __rhtpa_vm_infra_ssh_common_args }}"
+      python: "{{ __result.stdout | trim }}"

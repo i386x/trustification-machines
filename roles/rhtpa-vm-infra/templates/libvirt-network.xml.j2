@@ -1,0 +1,15 @@
+<network>
+  <name>{{ __network_spec.name }}</name>
+  <uuid>{{ __network_spec.uuid }}</uuid>
+  <forward mode="nat"/>
+  <bridge name="{{ __network_spec.bridge }}" stp="on" delay="0"/>
+  <mac address="{{ __network_spec.mac }}"/>
+  <ip address="{{ __network_spec.ipv4 }}" netmask="255.255.255.0">
+    <dhcp>
+      <range start="{{ __network_spec.dhcp.range.0 }}" end="{{ __network_spec.dhcp.range.1 }}"/>
+{% for host in __network_spec.dhcp.hosts %}
+        <host name="{{ host.name | trim }}" mac="{{ host.network.mac | trim }}" ip="{{ host.network.ipv4 | trim }}"/>
+{% endfor %}
+    </dhcp>
+  </ip>
+</network>

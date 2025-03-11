@@ -1,0 +1,21 @@
+---
+# Check that `vm_spec` and `vm_spec.name` are defined
+
+- name: Check that virtual machine specification is defined
+  ansible.builtin.assert:
+    that:
+      - vm_spec is defined
+      - vm_spec is mapping
+    fail_msg: >-
+      `vm_spec` (virtual machine specification) is not defined or it is not
+      a mapping
+
+- name: Check that `vm_spec.name` is defined
+  ansible.builtin.assert:
+    that:
+      - vm_spec.name is defined
+      - vm_spec.name is string
+      - vm_spec.name | trim | length > 0
+    fail_msg: >-
+      `vm_spec.name` is not defined or it is not a string or it is blank or
+      empty

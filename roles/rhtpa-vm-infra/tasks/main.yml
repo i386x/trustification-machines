@@ -1,0 +1,23 @@
+---
+- name: Include operating system specific variables
+  ansible.builtin.include_vars:
+    file: "{{ lookup('ansible.builtin.first_found', params) }}"
+    name: __rhtpa_vm_infra_os_vars
+  vars:
+    params:
+      files:
+        - "{{ ansible_distribution }}-{{ ansible_distribution_version }}-os.yml"
+        - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}-os.yml"
+        - "{{ ansible_distribution }}-os.yml"
+        - "{{ ansible_os_family }}-os.yml"
+        - default-os.yml
+      paths:
+        - vars
+
+- name: Invoke the selected task file
+  ansible.builtin.include_tasks:
+    file: "{{ invoke + '.yml' }}"
+  when:
+    - invoke is defined
+    - invoke is string
+    - invoke | trim | length > 0
