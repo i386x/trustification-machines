@@ -2,7 +2,7 @@
 - name: Include operating system specific variables
   ansible.builtin.include_vars:
     file: "{{ lookup('ansible.builtin.first_found', params) }}"
-    name: __rhtpa_vm_infra_os_vars
+    name: __tpa_vm_infra_os_vars
   vars:
     params:
       files:

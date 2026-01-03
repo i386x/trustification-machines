@@ -1,5 +1,13 @@
 ---
 # Find a proper QEMU emulator
+#
+# Input:
+#   item (required, usually defined inside loop)
+#
+# Output:
+#   __tpa_vm_infra_emulator
+#
+
 - name: Run `command -v {{ item }}`
   ansible.builtin.shell: >-
     command -v {{ item }} || :
@@ -8,11 +16,11 @@
   register: __result
   changed_when: false
   when:
-    - __rhtpa_vm_infra_emulator is undefined
+    - __tpa_vm_infra_emulator is undefined
 
 - name: Store the result of `command -v {{ item }}` into the fact
   ansible.builtin.set_fact:
-    __rhtpa_vm_infra_emulator: "{{ __result.stdout | trim }}"
+    __tpa_vm_infra_emulator: "{{ __result.stdout | trim }}"
   when:
-    - __rhtpa_vm_infra_emulator is undefined
+    - __tpa_vm_infra_emulator is undefined
     - __result.stdout | trim | length > 0

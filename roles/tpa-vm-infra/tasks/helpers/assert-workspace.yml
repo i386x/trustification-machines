@@ -1,0 +1,25 @@
+---
+# Check that `tpa_vm_infra_workspace` exists and it is a directory
+
+- name: Check that `tpa_vm_infra_workspace` is defined
+  ansible.builtin.assert:
+    that:
+      - tpa_vm_infra_workspace is defined
+      - tpa_vm_infra_workspace is string
+      - tpa_vm_infra_workspace | trim | length > 0
+    fail_msg: >-
+      `tpa_vm_infra_workspace` is not defined or it is not a string or it is
+      blank or empty
+
+- name: Get `tpa_vm_infra_workspace` stats
+  ansible.builtin.stat:
+    path: "{{ tpa_vm_infra_workspace | trim }}"
+  register: __result
+
+- name: Check that `tpa_vm_infra_workspace` is a directory
+  ansible.builtin.assert:
+    that:
+      - __result.stat.isdir is defined
+      - __result.stat.isdir
+    fail_msg: >-
+      `tpa_vm_infra_workspace` is not a directory

@@ -1,0 +1,38 @@
+---
+# Unique string that serves as a base for generating the UUID for a particular
+# virtual machine. Example of use:
+#
+#     "{{ (__tpa_vm_infra_uuid_base + 'vm-test1') | to_uuid }}"
+#
+# See https://docs.ansible.com/ansible/latest/collections/ansible/builtin/to_uuid_filter.html
+__tpa_vm_infra_uuid_base: "github.com/trustification/machines/roles/tpa-vm-infra/"
+__tpa_vm_infra_vm_uuid_base: "{{ __tpa_vm_infra_uuid_base + 'vm/' }}"
+__tpa_vm_infra_net_uuid_base: "{{ __tpa_vm_infra_uuid_base + 'net/' }}"
+
+# SSH/SCP common arguments
+__tpa_vm_infra_ssh_common_args: "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+
+# Virtual machine user and password
+__tpa_vm_infra_user: root
+__tpa_vm_infra_password: admin123456
+
+# Path to the directory with the cloud-init metadata (relative to the workspace
+# directory)
+__tpa_vm_infra_cloud_metadata_dir: "cloud"
+
+# ISO file with the cloud-init metadata
+__tpa_vm_infra_cloud_metadata_iso: "cloud-init.iso"
+
+# Guest log file for logging serial traffic
+__tpa_vm_infra_guest_log: "guest.log"
+
+# Image with a snapshot
+__tpa_vm_infra_snapshot_image: "snapshot.qcow2"
+
+# Virtual machine maintenance tools shell script name
+__tpa_vm_infra_tools_sh: "vmtools.sh"
+
+# List of symbolic links to the virtual machine maintenance tools shell script
+__tpa_vm_infra_tools_sh_links:
+  - vmscp
+  - vmssh

@@ -9,19 +9,19 @@
 
 - name: Setup libvirt
   ansible.builtin.include_tasks:
-    file: setup-libvirt.yml
+    file: helpers/setup-libvirt.yml
 
 - name: Check that virtual machine specification and name are defined
   ansible.builtin.include_tasks:
-    file: assert-vm_spec-name.yml
+    file: helpers/assert-vm_spec-name.yml
 
 - name: Check that workspace is defined and it is a directory
   ansible.builtin.include_tasks:
-    file: assert-workspace.yml
+    file: helpers/assert-workspace.yml
 
 - name: Compute the path to the virtual machine artifacts
   ansible.builtin.include_tasks:
-    file: artifacts-path.yml
+    file: helpers/artifacts-path.yml
 
 - name: Shutdown `{{ vm_spec.name | trim }}` virtual machine
   community.libvirt.virt:
@@ -68,19 +68,45 @@
       `ansible_effective_group_id({{ ansible_effective_group_id | d('undefined') }})`
       (in this message `'undefined' == anything` evaluates to false)
 
-- name: Get `vm_spec.image` stats
+- name: Check that `vm_spec.image` is defined
   ansible.builtin.include_tasks:
-    file: vm_spec-image-stat.yml
+    file: helpers/assert-vm_spec-image.yml
 
-- name: Ensure `vm_spec.image` owner and group
-  ansible.builtin.file:
-    path: "{{ __result.stat.path }}"
-    state: touch
-    owner: "{{ ansible_user_id }}"
-    group: "{{ ansible_user_id }}"
-    access_time: preserve
-    modification_time: preserve
-  when:
-    - __result.stat.path is defined
-    - __result.stat.isreg is defined
-    - __result.stat.isreg
+- name: Fix `vm_spec.image` owner and group
+  ansible.builtin.include_tasks:
+    file: helpers/chgrp.yml
+  vars:
+    path: "{{ vm_spec.image }}"
+
+- name: Compute the path to the cloud metadata ISO image
+  ansible.builtin.include_tasks:
+    file: helpers/cloud-metadata-image-path.yml
+
+- name: Fix cloud metadata ISO image owner and group
+  ansible.builtin.include_tasks:
+    file: helpers/chgrp.yml
+  vars:
+    path: "{{ __tpa_vm_infra_cloud_metadata_image }}"
+    isfull: true
+
+- name: Compute the path to the guest serial traffic log
+  ansible.builtin.include_tasks:
+    file: helpers/log-path.yml
+
+- name: Fix guest serial traffic log owner and group
+  ansible.builtin.include_tasks:
+    file: helpers/chgrp.yml
+  vars:
+    path: "{{ __tpa_vm_infra_guest_log_path }}"
+    isfull: true
+
+- name: Compute the path to the guest snapshot image
+  ansible.builtin.include_tasks:
+    file: helpers/snapshot-image-path.yml
+
+- name: Fix guest snapshot image owner and group
+  ansible.builtin.include_tasks:
+    file: helpers/chgrp.yml
+  vars:
+    path: "{{ __tpa_vm_infra_snapshot_image_path }}"
+    isfull: true

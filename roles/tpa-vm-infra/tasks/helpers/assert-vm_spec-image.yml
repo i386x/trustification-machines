@@ -1,5 +1,5 @@
 ---
-# Get `vm_spec.image` stats and store them to `__result`
+# Check that `vm_spec.image` is defined
 
 - name: Check that `vm_spec.image` is defined
   ansible.builtin.assert:
@@ -10,9 +10,3 @@
     fail_msg: >-
       `vm_spec.image` is not defined or it is not a string or it is blank or
       empty
-
-- name: Get `vm_spec.image` stats
-  ansible.builtin.stat:
-    path: "{{
-      (rhtpa_vm_infra_workspace | trim) + '/' + (vm_spec.image | trim) }}"
-  register: __result

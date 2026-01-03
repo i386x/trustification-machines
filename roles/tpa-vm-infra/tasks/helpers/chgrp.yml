@@ -1,0 +1,37 @@
+---
+# Change owner and group of `path` to `ansible_user_id`
+#
+# Task variables:
+#   path: The path to the regular file (optional, the task is skipped when
+#         missing)
+#   isfull: When `False` or not defined, the `path` is relative to
+#           `tpa_vm_infra_workspace` (optional)
+#
+
+- name: Get `{{ path | d('<undefined>') | trim }}` stats
+  ansible.builtin.stat:
+    path: "{{
+      ((tpa_vm_infra_workspace | trim) + '/' + (path | trim))
+      if not (isfull | d(False))
+      else (path | trim) }}"
+  register: __result
+  when:
+    - path is defined
+    - path is string
+    - path | trim | length > 0
+
+- name: Fix `{{ path | d('<undefined>') | trim }}` owner and group
+  ansible.builtin.file:
+    path: "{{ __result.stat.path }}"
+    state: touch
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
+    access_time: preserve
+    modification_time: preserve
+  when:
+    - path is defined
+    - path is string
+    - path | trim | length > 0
+    - __result.stat.path is defined
+    - __result.stat.isreg is defined
+    - __result.stat.isreg

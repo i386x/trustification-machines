@@ -1,0 +1,18 @@
+---
+# Compute the path to the cloud metadata ISO image
+#
+# Input:
+#   tpa_vm_infra_workspace (required)
+#   __tpa_vm_infra_cloud_metadata_dir (required)
+#   __tpa_vm_infra_cloud_metadata_iso (required)
+#
+# Output:
+#   __tpa_vm_infra_cloud_metadata_image
+#
+
+- name: Compute the path to the cloud metadata ISO image
+  ansible.builtin.set_fact:
+    __tpa_vm_infra_cloud_metadata_image: "{{
+      (tpa_vm_infra_workspace | trim) + '/'
+      + __tpa_vm_infra_cloud_metadata_dir + '/'
+      + __tpa_vm_infra_cloud_metadata_iso }}"

@@ -22,7 +22,7 @@
 
 - name: Setup libvirt
   ansible.builtin.include_tasks:
-    file: setup-libvirt.yml
+    file: helpers/setup-libvirt.yml
 
 - name: Check that network specification is defined
   ansible.builtin.assert:
@@ -54,9 +54,9 @@
 
 - name: Generate `network_spec.uuid` if it is not defined
   ansible.builtin.set_fact:
-    __rhtpa_vm_infra_net_uuid: "{{
+    __tpa_vm_infra_net_uuid: "{{
       network_spec.uuid | d(
-        (__rhtpa_vm_infra_net_uuid_base + (network_spec.name | trim)) | to_uuid
+        (__tpa_vm_infra_net_uuid_base + (network_spec.name | trim)) | to_uuid
       ) | trim }}"
 
 - name: Check that `network_spec.bridge` is defined
@@ -150,7 +150,7 @@
   ansible.builtin.set_fact:
     __network_spec:
       name: "{{ network_spec.name | trim }}"
-      uuid: "{{ __rhtpa_vm_infra_net_uuid }}"
+      uuid: "{{ __tpa_vm_infra_net_uuid }}"
       bridge: "{{ network_spec.bridge | trim }}"
       mac: "{{ network_spec.mac | trim }}"
       ipv4: "{{ network_spec.ipv4 | trim }}"

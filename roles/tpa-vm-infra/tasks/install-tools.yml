@@ -47,11 +47,11 @@
 
 - name: Check that workspace is defined and it is a directory
   ansible.builtin.include_tasks:
-    file: assert-workspace.yml
+    file: helpers/assert-workspace.yml
 
 - name: Get SSH private key stats
   ansible.builtin.stat:
-    path: "{{ rhtpa_vm_infra_workspace | trim }}/id_rsa"
+    path: "{{ tpa_vm_infra_workspace | trim }}/id_rsa"
   register: __result
 
 - name: Check that SSH private key is an existing file
@@ -64,9 +64,9 @@
   ansible.builtin.set_fact:
     __vmtools_spec:
       topdir: "{{ role_path }}"
-      user: "{{ __rhtpa_vm_infra_user }}"
-      ssh_common_args: "{{ __rhtpa_vm_infra_ssh_common_args }}"
-      id_rsa: "{{ rhtpa_vm_infra_workspace | trim }}/id_rsa"
+      user: "{{ __tpa_vm_infra_user }}"
+      ssh_common_args: "{{ __tpa_vm_infra_ssh_common_args }}"
+      id_rsa: "{{ tpa_vm_infra_workspace | trim }}/id_rsa"
       machines: "{{ vmtools_spec.machines }}"
 
 - name: Print the tools specification
@@ -86,12 +86,12 @@
 - name: Install the tools shell script
   ansible.builtin.template:
     src: vmtools.j2
-    dest: "{{ __home_local_bin_path }}/{{ __rhtpa_vm_infra_tools_sh }}"
+    dest: "{{ __home_local_bin_path }}/{{ __tpa_vm_infra_tools_sh }}"
     mode: '0755'
 
 - name: Create symlinks
   ansible.builtin.file:
-    src: "{{ __home_local_bin_path }}/{{ __rhtpa_vm_infra_tools_sh }}"
+    src: "{{ __home_local_bin_path }}/{{ __tpa_vm_infra_tools_sh }}"
     dest: "{{ __home_local_bin_path }}/{{ item }}"
     state: link
-  loop: "{{ __rhtpa_vm_infra_tools_sh_links }}"
+  loop: "{{ __tpa_vm_infra_tools_sh_links }}"

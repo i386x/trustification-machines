@@ -1,0 +1,15 @@
+---
+# Compute the path to the guest serial traffic log
+#
+# Input:
+#   __tpa_vm_infra_artifacts (required)
+#   __tpa_vm_infra_guest_log (required)
+#
+# Output:
+#   __tpa_vm_infra_guest_log_path
+#
+
+- name: Compute the path to the guest serial traffic log
+  ansible.builtin.set_fact:
+    __tpa_vm_infra_guest_log_path: "{{
+      __tpa_vm_infra_artifacts + '/' + __tpa_vm_infra_guest_log }}"

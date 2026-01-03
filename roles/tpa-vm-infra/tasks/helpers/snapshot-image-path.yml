@@ -1,0 +1,15 @@
+---
+# Compute the path to the guest snapshot image
+#
+# Input:
+#   __tpa_vm_infra_artifacts (required)
+#   __tpa_vm_infra_snapshot_image (required)
+#
+# Output:
+#   __tpa_vm_infra_snapshot_image_path
+#
+
+- name: Compute the path to the guest snapshot image
+  ansible.builtin.set_fact:
+    __tpa_vm_infra_snapshot_image_path: "{{
+      __tpa_vm_infra_artifacts + '/' + __tpa_vm_infra_snapshot_image }}"

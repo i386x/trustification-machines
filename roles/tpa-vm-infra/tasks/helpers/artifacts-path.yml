@@ -1,0 +1,15 @@
+---
+# Compute the path to the virtual machine artifacts
+#
+# Input:
+#   vm_spec.name (required)
+#   tpa_vm_infra_workspace (required)
+#
+# Output:
+#   __tpa_vm_infra_artifacts
+#
+
+- name: Compute the path to `vm_spec.name` artifacts
+  ansible.builtin.set_fact:
+    __tpa_vm_infra_artifacts: "{{
+      (tpa_vm_infra_workspace | trim) + '/vm-' + (vm_spec.name | trim) }}"

@@ -1,8 +1,13 @@
 ---
 # Setup and start the libvirtd service
+#
+# Input:
+#   __tpa_vm_infra_os_vars (required)
+#
+
 - name: Install libvirt
   ansible.builtin.package:
-    name: "{{ __rhtpa_vm_infra_os_vars.packages.libvirt }}"
+    name: "{{ __tpa_vm_infra_os_vars.packages.libvirt }}"
     state: present
 
 - name: Enable and start libvirtd

@@ -8,7 +8,7 @@
 
 - name: Setup libvirt
   ansible.builtin.include_tasks:
-    file: setup-libvirt.yml
+    file: helpers/setup-libvirt.yml
 
 - name: Check that network specification is defined properly
   ansible.builtin.assert:
